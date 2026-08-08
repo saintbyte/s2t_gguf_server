@@ -19,6 +19,27 @@
 - Для пересборки библиотек CrispASR: C++17 компилятор, CMake 3.14+
   (опционально CUDA Toolkit / Vulkan SDK — для GPU)
 
+## Клонирование
+
+Репозиторий использует `third_party/CrispASR` как git-субмодуль — на него
+ссылается `replace` в `go.mod`, поэтому клонировать нужно вместе с субмодулями:
+
+```sh
+git clone --recurse-submodules git@github.com:saintbyte/s2t_gguf_server.git
+```
+
+Если репозиторий уже склонирован без субмодулей (каталог `third_party/CrispASR`
+пуст):
+
+```sh
+git submodule update --init --recursive
+```
+
+Субмодуль зафиксирован на конкретном коммите: обновления внутри
+`third_party/CrispASR` не нужны и не рекомендуются — сборка рассчитана на
+зафиксированную версию. Для обновления: `git submodule update --remote
+third_party/CrispASR` (затем соберите библиотеки заново, см. ниже).
+
 ## Установка и запуск
 
 1. Скачайте модель:
@@ -203,5 +224,5 @@ cmd/app/main_test.go         # тесты (loadWav, HTTP-обработчики)
 cmd/app/config_test.go       # тесты загрузки конфига
 models/                      # GGUF-модели (скачиваются скриптом)
 scripts/download-model.sh    # загрузка модели с Hugging Face
-third_party/CrispASR         # форк bindings (подключён через go.mod replace)
+third_party/CrispASR         # git-субмодуль: форк bindings (подключён через go.mod replace)
 ```
