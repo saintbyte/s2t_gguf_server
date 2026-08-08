@@ -27,3 +27,4 @@ third_party/CrispASR/build_go/
 *.swp
 *~
 .DS_Store
+config.yml

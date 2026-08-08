@@ -2,7 +2,9 @@ package app
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -13,6 +15,7 @@ type Config struct {
 	Model       string `yaml:"model"`
 	Threads     int    `yaml:"threads"`
 	MaxUploadMB int    `yaml:"max_upload_mb"`
+	LogLevel    string `yaml:"log_level"`
 }
 
 // DefaultConfig возвращает настройки по умолчанию.
@@ -22,6 +25,7 @@ func DefaultConfig() Config {
 		Model:       "models/gigaam-v3-e2e-rnnt-q4_k.gguf",
 		Threads:     4,
 		MaxUploadMB: 200,
+		LogLevel:    "error",
 	}
 }
 
@@ -54,4 +58,20 @@ func loadConfig(paths ...string) (Config, error) {
 		return cfg, nil
 	}
 	return cfg, nil
+}
+
+// ParseLogLevel переводит строковое имя уровня логирования в slog.Level.
+// Допустимые значения: debug, info, warn, error.
+func ParseLogLevel(s string) (slog.Level, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		return slog.LevelDebug, nil
+	case "info":
+		return slog.LevelInfo, nil
+	case "warn", "warning":
+		return slog.LevelWarn, nil
+	case "error":
+		return slog.LevelError, nil
+	}
+	return 0, fmt.Errorf("неизвестный уровень логирования %q (ожидается debug, info, warn или error)", s)
 }

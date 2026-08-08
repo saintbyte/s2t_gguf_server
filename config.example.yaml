@@ -20,3 +20,6 @@ threads: 4
 
 # лимит размера загружаемого аудио, МБ
 max_upload_mb: 200
+
+# уровень логирования: debug, info, warn, error
+log_level: "error"

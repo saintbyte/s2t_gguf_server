@@ -61,6 +61,7 @@ func (s *Server) handleTranscribe(c *fiber.Ctx) error {
 		"elapsed_ms", res.ElapsedMs,
 		"text_len", len(res.Text),
 		"segments", len(res.Segments))
+	slog.Debug("текст транскрибации", "text", res.Text)
 
 	return c.JSON(res)
 }

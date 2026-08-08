@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -260,5 +261,36 @@ func TestIndex(t *testing.T) {
 	}
 	if !strings.Contains(string(readBody(t, resp)), "Транскрибация") {
 		t.Fatalf("на главной странице нет заголовка")
+	}
+}
+
+// TestHandler_DebugLog проверяет, что при уровне debug в лог пишется
+// распознанный текст.
+func TestHandler_DebugLog(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	defer slog.SetDefault(prev)
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	samples := make([]int16, 16000)
+	wav := buildWav(16000, 1, samples)
+
+	res := &whisper.TranscribeResult{
+		Segments: []whisper.TranscribeSegment{
+			{Text: "привет мир", T0: 0, T1: 100},
+		},
+	}
+
+	resp := doRequest(t, res, nil, multipartRequest(t, wav, "speech.wav"))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("ожидался 200, получено %d", resp.StatusCode)
+	}
+	readBody(t, resp)
+
+	if !strings.Contains(buf.String(), "текст транскрибации") {
+		t.Fatalf("в debug-логе нет сообщения о тексте: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "привет мир") {
+		t.Fatalf("в debug-логе нет распознанного текста: %s", buf.String())
 	}
 }

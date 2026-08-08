@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -22,7 +23,7 @@ func TestLoadConfig_Defaults(t *testing.T) {
 		t.Fatalf("неожиданная ошибка: %v", err)
 	}
 	if cfg.Addr != ":8080" || cfg.Model != "models/gigaam-v3-e2e-rnnt-q4_k.gguf" ||
-		cfg.Threads != 4 || cfg.MaxUploadMB != 200 {
+		cfg.Threads != 4 || cfg.MaxUploadMB != 200 || cfg.LogLevel != "error" {
 		t.Fatalf("ожидались значения по умолчанию, получено %+v", cfg)
 	}
 }
@@ -66,5 +67,34 @@ func TestLoadConfig_Invalid(t *testing.T) {
 	path := writeConfig(t, dir, "config.yaml", "addr: [не: корректно\n")
 	if _, err := loadConfig(path); err == nil {
 		t.Fatal("ожидалась ошибка для битого YAML")
+	}
+}
+
+// TestParseLogLevel проверяет разбор допустимых уровней логирования.
+func TestParseLogLevel(t *testing.T) {
+	cases := map[string]slog.Level{
+		"debug":   slog.LevelDebug,
+		"DEBUG":   slog.LevelDebug,
+		"info":    slog.LevelInfo,
+		"warn":    slog.LevelWarn,
+		"warning": slog.LevelWarn,
+		"error":   slog.LevelError,
+		"  info ": slog.LevelInfo,
+	}
+	for in, want := range cases {
+		got, err := ParseLogLevel(in)
+		if err != nil {
+			t.Fatalf("%q: неожиданная ошибка: %v", in, err)
+		}
+		if got != want {
+			t.Fatalf("%q: ожидался %v, получено %v", in, want, got)
+		}
+	}
+}
+
+// TestParseLogLevel_Invalid проверяет ошибку на неизвестном уровне.
+func TestParseLogLevel_Invalid(t *testing.T) {
+	if _, err := ParseLogLevel("verbose"); err == nil {
+		t.Fatal("ожидалась ошибка для неизвестного уровня")
 	}
 }

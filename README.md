@@ -158,6 +158,10 @@ go build -ldflags "-extldflags '-lcudart -lcuda -lcublas'" -o s2t_gguf_server ./
 Пример — `config.example.yaml`. Пропущенные поля берутся из значений по
 умолчанию, флаги командной строки имеют приоритет над конфигом.
 
+По умолчанию `log_level: "error"` — в лог попадают только ошибки. Для
+диагностики используйте `info` (в лог попадут и обычные события: HTTP-запросы,
+транскрибация) или `debug`.
+
 ## Флаги
 
 | Флаг            | По умолчанию                                   | Описание                     |
@@ -166,6 +170,7 @@ go build -ldflags "-extldflags '-lcudart -lcuda -lcublas'" -o s2t_gguf_server ./
 | `-model`        | `models/gigaam-v3-e2e-rnnt-q4_k.gguf`          | путь к GGUF-модели           |
 | `-threads`      | `4`                                            | число потоков ggml           |
 | `-max_upload_mb`| `200`                                          | лимит загрузки аудио, МБ     |
+| `-log_level`    | `error`                                        | уровень логирования: `debug`, `info`, `warn`, `error` |
 
 ## HTTP API
 

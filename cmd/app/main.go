@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/saintbyte/s2t_gguf_server/internal/app"
 	whisper "github.com/CrispStrobe/CrispASR/bindings/go"
+	"github.com/saintbyte/s2t_gguf_server/internal/app"
 )
 
 func main() {
@@ -21,13 +21,20 @@ func main() {
 	model := flag.String("model", cfg.Model, "путь к GGUF-модели")
 	threads := flag.Int("threads", cfg.Threads, "число потоков ggml")
 	maxUploadMB := flag.Int("max_upload_mb", cfg.MaxUploadMB, "лимит загрузки аудио, МБ")
+	logLevel := flag.String("log_level", cfg.LogLevel, "уровень логирования: debug, info, warn, error")
 	flag.Parse()
 
 	if *maxUploadMB > 0 {
 		app.MaxUpload = int64(*maxUploadMB) << 20
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	lvl, err := app.ParseLogLevel(*logLevel)
+	if err != nil {
+		slog.Error("неизвестный уровень логирования", "level", *logLevel)
+		os.Exit(1)
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
 	slog.SetDefault(logger)
 
 	if _, err := os.Stat(*model); err != nil {
