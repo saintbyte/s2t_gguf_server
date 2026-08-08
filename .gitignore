@@ -1,0 +1,29 @@
+# Бинари сборки
+/app
+/s2t_gguf_server
+/out/
+
+# GGUF-модели (скачиваются scripts/download-model.sh)
+models/
+
+# Локальный конфиг (пример — config.example.yaml)
+config.yaml
+
+# Логи
+*.log
+
+# Артефакты сборки Go
+*.test
+*.out
+coverage.html
+coverage.txt
+
+# Артефакты CMake CrispASR
+third_party/CrispASR/build_go/
+
+# Редакторы и ОС
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store

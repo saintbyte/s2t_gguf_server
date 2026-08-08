@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Транскрибация речи</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #222; }
+  main { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+  h1 { font-size: 20px; }
+  #drop {
+    border: 2px dashed #b6bfca; border-radius: 10px; padding: 36px 20px;
+    text-align: center; background: #fff; cursor: pointer; transition: .15s;
+  }
+  #drop.dragover { border-color: #3b82f6; background: #eff6ff; }
+  #drop input { display: none; }
+  #drop .hint { color: #6b7280; font-size: 14px; }
+  button {
+    margin-top: 14px; padding: 10px 22px; border: 0; border-radius: 8px;
+    background: #3b82f6; color: #fff; font-size: 15px; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  #status { margin-top: 14px; font-size: 14px; color: #6b7280; white-space: pre-wrap; }
+  #result { margin-top: 16px; background: #fff; border-radius: 10px; padding: 16px;
+    border: 1px solid #e2e8f0; display: none; }
+  #result h2 { font-size: 14px; margin: 0 0 8px; color: #6b7280; font-weight: 600; }
+  #text { font-size: 17px; line-height: 1.5; }
+  #error { margin-top: 14px; color: #b91c1c; font-size: 14px; }
+  #mic {
+    margin-top: 18px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+    padding: 14px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  #mic button { margin-top: 0; padding: 8px 16px; }
+  #mic button.danger { background: #dc2626; }
+  #rec-status { font-size: 14px; color: #6b7280; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Транскрибация речи (русский)</h1>
+
+  <div id="drop">
+    <p>Перетащите WAV-файл сюда или нажмите, чтобы выбрать</p>
+    <p class="hint">16 kHz моно (передискретизация выполняется автоматически)</p>
+    <input type="file" id="file" accept=".wav,audio/wav">
+  </div>
+
+  <div id="mic">
+    <button id="rec-btn">Записать с микрофона</button>
+    <button id="stop-btn" class="danger" style="display:none">Остановить</button>
+    <span id="rec-status"></span>
+  </div>
+
+  <button id="btn" disabled>Транскрибировать</button>
+  <div id="status"></div>
+  <div id="error"></div>
+
+  <div id="result">
+    <h2>Результат</h2>
+    <div id="text"></div>
+  </div>
+</main>
+
+<script>
+const drop = document.getElementById('drop');
+const input = document.getElementById('file');
+const btn = document.getElementById('btn');
+const statusEl = document.getElementById('status');
+const errorEl = document.getElementById('error');
+const resultEl = document.getElementById('result');
+const textEl = document.getElementById('text');
+const recBtn = document.getElementById('rec-btn');
+const stopBtn = document.getElementById('stop-btn');
+const recStatus = document.getElementById('rec-status');
+
+let currentFile = null;
+let recording = false;
+
+function setFile(f) {
+  if (!f) return;
+  if (!f.name.toLowerCase().endsWith('.wav') && f.type !== 'audio/wav') {
+    errorEl.textContent = 'Пожалуйста, выберите WAV-файл';
+    return;
+  }
+  currentFile = f;
+  btn.disabled = false;
+  errorEl.textContent = '';
+  statusEl.textContent = 'Выбран файл: ' + f.name;
+}
+
+drop.addEventListener('click', () => input.click());
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('dragover');
+  setFile(e.dataTransfer.files[0]);
+});
+input.addEventListener('change', () => setFile(input.files[0]));
+
+function encodeWav(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (off, s) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  let off = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    off += 2;
+  }
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+recBtn.addEventListener('click', async () => {
+  errorEl.textContent = '';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    errorEl.textContent = 'Ошибка: микрофон не поддерживается в этом браузере';
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    errorEl.textContent = 'Ошибка: не удалось получить доступ к микрофону (' + err.name + ')';
+    return;
+  }
+  recording = true;
+  recBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-block';
+  statusEl.textContent = '';
+  resultEl.style.display = 'none';
+
+  const audioCtx = new AudioContext();
+  const sampleRate = audioCtx.sampleRate;
+  const source = audioCtx.createMediaStreamSource(stream);
+  const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+  const silence = audioCtx.createGain();
+  silence.gain.value = 0;
+  source.connect(processor);
+  processor.connect(silence);
+  silence.connect(audioCtx.destination);
+
+  const chunks = [];
+  processor.onaudioprocess = e => {
+    chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+  };
+
+  const startedAt = performance.now();
+  const timer = setInterval(() => {
+    recStatus.textContent = 'Запись… ' + ((performance.now() - startedAt) / 1000).toFixed(1) + ' с';
+  }, 100);
+
+  stopBtn.onclick = () => {
+    if (!recording) return;
+    recording = false;
+    clearInterval(timer);
+    stopBtn.style.display = 'none';
+    recBtn.style.display = 'inline-block';
+    recStatus.textContent = '';
+
+    processor.disconnect();
+    source.disconnect();
+    stream.getTracks().forEach(t => t.stop());
+    audioCtx.close();
+
+    let len = 0;
+    for (const c of chunks) len += c.length;
+    const pcm = new Float32Array(len);
+    let off = 0;
+    for (const c of chunks) { pcm.set(c, off); off += c.length; }
+
+    if (pcm.length === 0) {
+      errorEl.textContent = 'Ошибка: запись пуста';
+      return;
+    }
+
+    currentFile = new File([encodeWav(pcm, sampleRate)], 'microphone.wav', { type: 'audio/wav' });
+    btn.disabled = false;
+    statusEl.textContent =
+      'Запись с микрофона готова · ' + (pcm.length / sampleRate).toFixed(1) + ' с';
+  };
+});
+
+btn.addEventListener('click', async () => {
+  if (!currentFile) return;
+  btn.disabled = true;
+  statusEl.textContent = 'Транскрибирую…';
+  errorEl.textContent = '';
+
+  const form = new FormData();
+  form.append('file', currentFile);
+
+  try {
+    const res = await fetch('/api/transcribe', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    resultEl.style.display = 'block';
+    textEl.textContent = data.text || '(пусто)';
+    statusEl.textContent =
+      'Готово · ' + currentFile.name + ' · длительность ' + data.duration.toFixed(1) + ' с';
+    if (data.segments && data.segments.length > 1) {
+      statusEl.textContent += ' · сегментов: ' + data.segments.length;
+    }
+  } catch (err) {
+    errorEl.textContent = 'Ошибка: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
